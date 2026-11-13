@@ -129,11 +129,11 @@ local function buildReport()
 		end
 	end)
 	parts[#parts + 1] = "-- notes (" .. #Diagnostics.notes .. ") --"
-	for _, m in Diagnostics.notes do parts[#parts + 1] = m end
+	for _, m in ipairs(Diagnostics.notes) do parts[#parts + 1] = m end
 	parts[#parts + 1] = "-- warnings (" .. #Diagnostics.warnings .. ") --"
-	for _, m in Diagnostics.warnings do parts[#parts + 1] = m end
+	for _, m in ipairs(Diagnostics.warnings) do parts[#parts + 1] = m end
 	parts[#parts + 1] = "-- errors (" .. #Diagnostics.errors .. ") --"
-	for _, m in Diagnostics.errors do parts[#parts + 1] = m end
+	for _, m in ipairs(Diagnostics.errors) do parts[#parts + 1] = m end
 	return table.concat(parts, "\n")
 end
 
@@ -142,6 +142,10 @@ local function copyReport()
 	if copyToClipboard(report) then
 		print("[OreVM] diagnostic report copied to clipboard (" .. #report .. " chars) - paste it back to the developer")
 	else
+		pcall(function()
+			writefile("OreVM_report.txt", report)
+			print("[OreVM] clipboard unavailable - report saved to workspace file OreVM_report.txt")
+		end)
 		warn("[OreVM] clipboard unavailable - report printed below:\n" .. report)
 	end
 end
@@ -335,7 +339,7 @@ setStage("modules loaded")
 
 local function missingModules()
 	local missing = {}
-	for _, name in { "Data", "Items", "Communicator" } do
+	for _, name in ipairs({ "Data", "Items", "Communicator" }) do
 		if not Modules[name] then table.insert(missing, name) end
 	end
 	return missing
@@ -393,7 +397,7 @@ local function getBeamGroups(def)
 		}
 		table.insert(byKey[tag], entry)
 	end
-	for _, k in keys do
+	for _, k in ipairs(keys) do
 		table.insert(groups, byKey[k])
 	end
 	return groups
@@ -449,15 +453,15 @@ local TIMED_EFFECTS = { Weaken = true, Empower = true, Poison = true, Growth = t
 -- Exact replication of ItemValues.TimedFactor: best factor over the timeline.
 local function timedFactor(list)
 	local points = { 0 }
-	for _, e in list do
+	for _, e in ipairs(list) do
 		local start = e[3] or 0
 		table.insert(points, start)
 		table.insert(points, start + (e[2] or 0))
 	end
 	local best = 1
-	for _, t in points do
+	for _, t in ipairs(points) do
 		local f = 1
-		for _, e in list do
+		for _, e in ipairs(list) do
 			local dur = e[2] or 0
 			local start = e[3] or 0
 			local ramp
@@ -576,14 +580,14 @@ local function evalSpecials(def, specialTags, ore, opts)
 				return nil
 			end
 			if MULTIPLE_REACTIONS[name] then
-				for _, entry in args do
+				for _, entry in ipairs(args) do
 					if typeof(entry) == "table" and typeof(entry[1]) == "number" then
 						factor = factor * BigNum.fromNumber(math.max(entry[1], 1))
 					end
 				end
 			elseif name == "Chance" then
 				local best = 1
-				for _, entry in args do
+				for _, entry in ipairs(args) do
 					if typeof(entry) == "table" and entry[2] == "Multiply"
 						and typeof(entry[3]) == "table" and typeof(entry[3][1]) == "number" then
 						best = math.max(best, entry[3][1])
@@ -601,7 +605,7 @@ local function evalSpecials(def, specialTags, ore, opts)
 					factor = factor * BigNum.fromNumber(math.max(args[1] or 1, 1))
 				end
 			elseif name == "Multiple Tag Reactions" then
-				for _, entry in args do
+				for _, entry in ipairs(args) do
 					if typeof(entry) == "table" and typeof(entry[1]) == "number" then
 						local target = typeof(entry[2]) == "string" and entry[2] or nil
 						local minCount = entry[3] or 1
@@ -635,7 +639,7 @@ local function evalSpecials(def, specialTags, ore, opts)
 				factor = factor * BigNum.fromNumber(math.max((args[1] or 1) ^ n, 1))
 			elseif name == "Blood Consumption" then
 				local consumed = false
-				for _, e in { "Fire", "Poison", "Overload", "Weaken" } do
+				for _, e in ipairs({ "Fire", "Poison", "Overload", "Weaken" }) do
 					if ore.effects[e] then
 						consumed = true
 						if opts.applyMutations then ore.effects[e] = nil end
@@ -655,7 +659,7 @@ local function evalSpecials(def, specialTags, ore, opts)
 				end
 			elseif name == "Multiple Effect Immunities" then
 				if opts.applyMutations then
-					for _, e in args do
+					for _, e in ipairs(args) do
 						if typeof(e) == "string" then
 							ore.immune[e] = true
 							ore.effects[e] = nil
@@ -757,10 +761,10 @@ local function simulateItem(def, oreIn)
 	local minVal = minimumValueFor(def)
 	local anyApplied = false
 
-	for _, group in groups do
+	for _, group in ipairs(groups) do
 		local maxLimit = 0
 		local hasCash = false
-		for _, e in group do
+		for _, e in ipairs(group) do
 			if e.CashLimit then hasCash = true else maxLimit = math.max(maxLimit, e.Limit or 1) end
 		end
 		-- upgrade tag for this item is recorded once per pass (variants count too)
@@ -771,7 +775,7 @@ local function simulateItem(def, oreIn)
 			cap = math.min(#group, maxLimit)
 		end
 		local applied = 0
-		for _, entry in group do
+		for _, entry in ipairs(group) do
 			if applied >= cap then break end
 			if minVal and not (ore.value < minVal) then
 				break
@@ -819,11 +823,11 @@ local function optimisticGain(def)
 	if not globalFactor then return nil end
 
 	local total = BigNum.one()
-	for _, group in groups do
+	for _, group in ipairs(groups) do
 		local entries = {}
 		local hasCash = false
 		local maxLimit = 0
-		for _, e in group do
+		for _, e in ipairs(group) do
 			if e.CashLimit then
 				hasCash = true
 			else
@@ -863,7 +867,7 @@ end
 
 local function nameIsForbidden(name)
 	local lower = string.lower(name)
-	for _, pat in FORBIDDEN_NAME_PATTERNS do
+	for _, pat in ipairs(FORBIDDEN_NAME_PATTERNS) do
 		if string.find(lower, pat, 1, true) then return true end
 	end
 	return false
@@ -1016,9 +1020,9 @@ end
 ------------------------------------------------------------------------------
 
 local function canClearLater(appliedEffects, remainingCleansers)
-	for _, e in appliedEffects do
+	for _, e in ipairs(appliedEffects) do
 		local cleared = false
-		for _, c in remainingCleansers do
+		for _, c in ipairs(remainingCleansers) do
 			if c > 0 then
 				cleared = true
 				break
@@ -1038,24 +1042,24 @@ local function runOptimiser(pool, startValue)
 
 	-- Preselect candidates by optimistic gain (log10), keep cleansers.
 	local scored = {}
-	for idx, entry in pool do
+	for idx, entry in ipairs(pool) do
 		local gain = optimisticGain(entry.def)
 		table.insert(scored, { idx = idx, entry = entry, gain = gain or -math.huge })
 	end
 	table.sort(scored, function(a, b) return a.gain > b.gain end)
 	local chosen, cleanserCount = {}, 0
-	for _, s in scored do
+	for _, s in ipairs(scored) do
 		if #chosen < CONFIG.MAX_CANDIDATES then
 			table.insert(chosen, s)
 			if cleansesEffect(s.entry.def) then cleanserCount = cleanserCount + 1 end
 		end
 	end
 	if cleanserCount < CONFIG.MIN_CLEANSE_KEEP then
-		for _, s in scored do
+		for _, s in ipairs(scored) do
 			if #chosen >= CONFIG.MAX_CANDIDATES then break end
 			local isCleanser = cleansesEffect(s.entry.def)
 			local already = false
-			for _, c in chosen do
+			for _, c in ipairs(chosen) do
 				if c.idx == s.idx then
 					already = true
 					break
@@ -1097,8 +1101,8 @@ local function runOptimiser(pool, startValue)
 
 	for depth = 1, math.min(n, CONFIG.MAX_CANDIDATES) do
 		local nextBeam = {}
-		for _, node in beam do
-			for ci, s in chosen do
+		for _, node in ipairs(beam) do
+			for ci, s in ipairs(chosen) do
 				local usedCount = node.used[s.idx] or 0
 				if usedCount < s.entry.left then
 					local newOre, applied = simulateItem(s.entry.def, node.ore)
@@ -1112,7 +1116,7 @@ local function runOptimiser(pool, startValue)
 						local legal = true
 						if #newPending > 0 then
 							local remaining = {}
-							for cj, s2 in chosen do
+							for cj, s2 in ipairs(chosen) do
 								if cj ~= ci then
 									local rem = s2.entry.left - ((node.used[s2.idx] or 0) + (cj == ci and 1 or 0))
 									if rem > 0 and cleansesEffect(s2.entry.def) then
@@ -1161,8 +1165,8 @@ local function runOptimiser(pool, startValue)
 
 	local finalOre = newOreState()
 	finalOre.value = startValue
-	for _, name in best.order do
-		for _, s in chosen do
+	for _, name in ipairs(best.order) do
+		for _, s in ipairs(chosen) do
 			if s.entry.name == name then
 				local o = simulateItem(s.entry.def, finalOre)
 				if o then finalOre = o end
@@ -1280,7 +1284,7 @@ local function aabbOfPart(basePart, part)
 		cf * Vector3.new(-size.X / 2, 0, -size.Z / 2),
 	}
 	local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
-	for _, c in corners do
+	for _, c in ipairs(corners) do
 		local lp = basePart.CFrame:PointToObjectSpace(c)
 		minX = math.min(minX, lp.X); maxX = math.max(maxX, lp.X)
 		minZ = math.min(minZ, lp.Z); maxZ = math.max(maxZ, lp.Z)
@@ -1332,7 +1336,7 @@ local function planLayout(basePart, itemsFolder, orderedItems, teleporters)
 
 	local function rectFree(x0, x1, z0, z1)
 		if x0 < minX or x1 > maxX or z0 < minZ or z1 > maxZ then return false end
-		for _, r in occupied do
+		for _, r in ipairs(occupied) do
 			if overlaps(x0, x1, z0, z1, r.x0, r.x1, r.z0, r.z1) then return false end
 		end
 		return true
@@ -1350,7 +1354,7 @@ local function planLayout(basePart, itemsFolder, orderedItems, teleporters)
 
 	local rows = {}
 	local remaining = {}
-	for _, it in orderedItems do table.insert(remaining, it) end
+	for _, it in ipairs(orderedItems) do table.insert(remaining, it) end
 
 	local bandBottom = minZ
 	local fitCount = 0
@@ -1363,7 +1367,7 @@ local function planLayout(basePart, itemsFolder, orderedItems, teleporters)
 			local maxHalfAcross = 0
 			local cursorX = snapUp(minX + offset) -- left edge of the next item
 			local trialRemaining = {}
-			for _, it in remaining do table.insert(trialRemaining, it) end
+			for _, it in ipairs(remaining) do table.insert(trialRemaining, it) end
 			local i = 1
 			while i <= #trialRemaining do
 				local it = trialRemaining[i]
@@ -1411,7 +1415,7 @@ local function planLayout(basePart, itemsFolder, orderedItems, teleporters)
 	local tpPairs = {}
 	if usesTeleporters and teleporters then
 		local senders, receivers = {}, {}
-		for _, tp in teleporters do
+		for _, tp in ipairs(teleporters) do
 			local st = tp.def.SpecialTags
 			if typeof(st) == "table" then
 				if typeof(st.Sender) == "table" then
@@ -1421,9 +1425,9 @@ local function planLayout(basePart, itemsFolder, orderedItems, teleporters)
 				end
 			end
 		end
-		for _, snd in senders do
+		for _, snd in ipairs(senders) do
 			local grp = snd.def.SpecialTags.Sender[1]
-			for _, rcv in receivers do
+			for _, rcv in ipairs(receivers) do
 				local rgrp = rcv.def.SpecialTags.Receiver[1]
 				if grp == rgrp and snd.left > 0 and rcv.left > 0 then
 					table.insert(tpPairs, { sender = snd, receiver = rcv })
@@ -1436,7 +1440,7 @@ local function planLayout(basePart, itemsFolder, orderedItems, teleporters)
 		-- Sender at the END of row k teleports ore to a Receiver at the START
 		-- of row k+1 (Sender.Groups / Receiver.Groups are keyed by SpecialTags[1]).
 		local linked = 0
-		for k, pair in tpPairs do
+		for k, pair in ipairs(tpPairs) do
 			local fromRow = rows[k]
 			local toRow = rows[k + 1]
 			if not fromRow or not toRow then break end
@@ -1524,7 +1528,7 @@ local function normaliseResults(ok, r1, r2, r3, entryCount)
 	elseif type(r1) == "table" then
 		local boughtNames = {}
 		if typeof(r2) == "table" then
-			for _, nm in r2 do boughtNames[nm] = true end
+			for _, nm in ipairs(r2) do boughtNames[nm] = true end
 		end
 		local results = {}
 		for i = 1, entryCount do
@@ -1536,7 +1540,7 @@ local function normaliseResults(ok, r1, r2, r3, entryCount)
 			end
 		end
 		if next(boughtNames) then
-			for _, res in results do
+			for _, res in ipairs(results) do
 				res.bought = true
 			end
 			return results, "server reported purchases for this batch"
@@ -1566,7 +1570,7 @@ local function verifyPlacedModels(tycoon, expectedIds, timeout)
 	local items = tycoon:FindFirstChild("Items")
 	if not items then return false end
 	local remaining = {}
-	for _, id in expectedIds do
+	for _, id in ipairs(expectedIds) do
 		if id then remaining[id] = true end
 	end
 	if next(remaining) == nil then return true end
@@ -1599,13 +1603,13 @@ local function buildFactory(baseInfo, plan, onProgress)
 	local yaw = plan.yaw
 
 	local queue = {}
-	for _, row in plan.rows do
-		for _, cell in row.items do
+	for _, row in ipairs(plan.rows) do
+		for _, cell in ipairs(row.items) do
 			table.insert(queue, cell)
 		end
 	end
 	if plan.usesTeleporters then
-		for _, pair in plan.tpPairs do
+		for _, pair in ipairs(plan.tpPairs) do
 			if pair.receiverCell then table.insert(queue, pair.receiverCell) end
 			if pair.senderCell then table.insert(queue, pair.senderCell) end
 		end
@@ -1615,7 +1619,7 @@ local function buildFactory(baseInfo, plan, onProgress)
 	local function flush()
 		if #batch == 0 then return true end
 		local entries = {}
-		for _, cell in batch do
+		for _, cell in ipairs(batch) do
 			table.insert(entries, {
 				Name = cell.name,
 				CFrame = worldCFrame(basePart, cell.def, cell.cx, cell.cz, yaw),
@@ -1631,7 +1635,7 @@ local function buildFactory(baseInfo, plan, onProgress)
 		end
 		local confirmedIds = {}
 		local bought = false
-		for i, res in results do
+		for i, res in ipairs(results) do
 			local cell = batch[i]
 			if res.bought then
 				bought = true
@@ -1659,7 +1663,7 @@ local function buildFactory(baseInfo, plan, onProgress)
 		return true
 	end
 
-	for _, cell in queue do
+	for _, cell in ipairs(queue) do
 		if BuildState.stopRequested then
 			note("build stopped by user after %d placed, %d rejected", BuildState.placed, BuildState.rejected)
 			flush()
@@ -1790,7 +1794,7 @@ local function buildGuiIn(parent)
 
 	local buttons = {}
 	local labels = { "SCAN INVENTORY", "CALCULATE BEST ORDER", "BUILD OPTIMISED FACTORY", "STOP" }
-	for i, label in labels do
+	for i, label in ipairs(labels) do
 		local btn = make("TextButton", {
 			Name = label,
 			Size = UDim2.new(1, -16, 0, 46 * scale),
@@ -1849,7 +1853,7 @@ end
 
 local function buildGui()
 	local lastErr
-	for _, parent in guiParentCandidates() do
+	for _, parent in ipairs(guiParentCandidates()) do
 		local ok, gui = pcall(buildGuiIn, parent)
 		if ok and gui and gui.Parent == parent then
 			setStage("gui built in " .. parent:GetFullName())
@@ -1896,7 +1900,7 @@ end
 
 local function setButtonsEnabled(enabled)
 	if UI.buttons then
-		for i, btn in UI.buttons do
+		for i, btn in ipairs(UI.buttons) do
 			btn.Active = enabled
 			btn.AutoButtonColor = enabled
 		end
@@ -1955,10 +1959,10 @@ local function doScan()
 	setStatus("Scan complete. Press CALCULATE BEST ORDER.")
 	setStats(table.concat(lines, "\n"))
 	note("=== SCAN RESULTS ===")
-	for _, e in scan.available do
+	for _, e in ipairs(scan.available) do
 		note("  upgrader: %s (x%d available)", e.name, e.left)
 	end
-	for _, tp in scan.teleporters do
+	for _, tp in ipairs(scan.teleporters) do
 		note("  teleporter: %s (x%d)", tp.name, tp.left)
 	end
 	for name, reason in pairs(scan.excluded) do
@@ -2016,7 +2020,7 @@ local function doBuild()
 	if not baseInfo then
 		setStatus("Base detection failed.", true)
 		errf("Base detection failed. Missing objects:")
-		for _, m in missingObjs do
+		for _, m in ipairs(missingObjs) do
 			errf("  - %s", m)
 		end
 		setStats("Base detection failed:\n" .. table.concat(missingObjs, "\n"))
@@ -2026,9 +2030,9 @@ local function doBuild()
 
 	setStatus("Planning layout...")
 	local byName = {}
-	for _, e in Session.scan.available do byName[e.name] = e end
+	for _, e in ipairs(Session.scan.available) do byName[e.name] = e end
 	local ordered = {}
-	for _, name in Session.result.order do
+	for _, name in ipairs(Session.result.order) do
 		local e = byName[name]
 		if e then table.insert(ordered, e) end
 	end
@@ -2043,7 +2047,7 @@ local function doBuild()
 	end
 
 	Session.plan = plan
-	for _, n in plan.notes do
+	for _, n in ipairs(plan.notes) do
 		note("layout note: %s", n)
 	end
 	note("layout: %d row(s), %d item(s) fit, %d did not fit, teleporter link: %s",

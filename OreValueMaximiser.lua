@@ -1701,6 +1701,9 @@ end
 
 local function guiParentCandidates()
 	local candidates = {}
+	pcall(function()
+		table.insert(candidates, LocalPlayer:WaitForChild("PlayerGui"))
+	end)
 	if type(gethui) == "function" then
 		pcall(function()
 			local h = gethui()
@@ -1709,9 +1712,6 @@ local function guiParentCandidates()
 	end
 	pcall(function()
 		table.insert(candidates, game:GetService("CoreGui"))
-	end)
-	pcall(function()
-		table.insert(candidates, LocalPlayer:WaitForChild("PlayerGui"))
 	end)
 	return candidates
 end
@@ -1731,6 +1731,7 @@ local function buildGuiIn(parent)
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	}, parent)
 	gui.DisplayOrder = 999999
+	gui.Enabled = true
 
 	local isMobile = false
 	pcall(function()
@@ -1741,8 +1742,9 @@ local function buildGuiIn(parent)
 
 	local panel = make("Frame", {
 		Name = "Panel",
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Size = UDim2.fromOffset(320 * scale, 430 * scale),
-		Position = UDim2.new(0, 12, 0, 12),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(24, 26, 34),
 		BorderSizePixel = 0,
 		Active = true,
@@ -1860,14 +1862,9 @@ local function buildGui()
 			note("GUI parented to %s", parent:GetFullName())
 			task.delay(3, function()
 				if not gui.Parent then
-					warn("[OreVM] GUI was removed from " .. parent:GetFullName() .. " - rebuilding in PlayerGui")
-					local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-					if playerGui then
-						local ok2, gui2 = pcall(buildGuiIn, playerGui)
-						if ok2 and gui2 and connectButtons then
-							pcall(connectButtons)
-						end
-					end
+					warn("[OreVM] GUI was removed from " .. parent:GetFullName() .. " - rebuilding")
+					pcall(buildGui)
+					if connectButtons then pcall(connectButtons) end
 				end
 			end)
 			return gui

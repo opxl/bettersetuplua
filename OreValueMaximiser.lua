@@ -91,6 +91,61 @@ local function errf(fmt, ...)
 	warn(msg)
 end
 
+local LocalPlayer
+Diagnostics.stage = "loading"
+
+local function setStage(stage)
+	Diagnostics.stage = stage
+end
+
+local function copyToClipboard(text)
+	local copied = false
+	if type(setclipboard) == "function" then
+		pcall(function() setclipboard(text) copied = true end)
+	end
+	if not copied and type(toclipboard) == "function" then
+		pcall(function() toclipboard(text) copied = true end)
+	end
+	if not copied and type(syn) == "table" and type(syn.set_clipboard) == "function" then
+		pcall(function() syn.set_clipboard(text) copied = true end)
+	end
+	return copied
+end
+
+local function buildReport()
+	local parts = {
+		"=== OreValueMaximiser diagnostic report ===",
+		"stage: " .. tostring(Diagnostics.stage),
+	}
+	pcall(function() parts[#parts + 1] = "place: " .. tostring(game.PlaceId) end)
+	pcall(function()
+		if type(identifyexecutor) == "function" then
+			parts[#parts + 1] = "executor: " .. tostring(identifyexecutor())
+		end
+	end)
+	pcall(function()
+		if LocalPlayer then
+			parts[#parts + 1] = "player: " .. LocalPlayer.Name
+		end
+	end)
+	parts[#parts + 1] = "-- notes (" .. #Diagnostics.notes .. ") --"
+	for _, m in Diagnostics.notes do parts[#parts + 1] = m end
+	parts[#parts + 1] = "-- warnings (" .. #Diagnostics.warnings .. ") --"
+	for _, m in Diagnostics.warnings do parts[#parts + 1] = m end
+	parts[#parts + 1] = "-- errors (" .. #Diagnostics.errors .. ") --"
+	for _, m in Diagnostics.errors do parts[#parts + 1] = m end
+	return table.concat(parts, "\n")
+end
+
+local function copyReport()
+	local report = buildReport()
+	if copyToClipboard(report) then
+		print("[OreVM] diagnostic report copied to clipboard (" .. #report .. " chars) - paste it back to the developer")
+	else
+		warn("[OreVM] clipboard unavailable - report printed below:\n" .. report)
+	end
+end
+
 ------------------------------------------------------------------------------
 -- BIG NUMBER (log10-domain, sign aware; values can exceed double range)
 -- representation: { sign = -1|0|1, l = log10(|value|) }  (l = -inf when zero)
@@ -232,9 +287,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local RunService = game:GetService("RunService")
 
-local LocalPlayer = Players.LocalPlayer
+LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
 	errf("Players.LocalPlayer missing - script must run client-side.")
+	copyReport()
 	return
 end
 
@@ -275,6 +331,7 @@ Modules.Communicator = safeRequire(rsLibs and getChild(rsLibs, "Communicator", "
 Modules.Stats = safeRequire(rfLibs and getChild(rfLibs, "Stats", "Stats library"), "Stats")
 Modules.WingPoint = safeRequire(rsLibs and getChild(rsLibs, "WingPoint", "WingPoint"), "WingPoint")
 Modules.Halloween = safeRequire(rsLibs and getChild(rsLibs, "Halloween", "Halloween"), "Halloween")
+setStage("modules loaded")
 
 local function missingModules()
 	local missing = {}
@@ -1656,6 +1713,7 @@ local function guiParentCandidates()
 end
 
 local function buildGuiIn(parent)
+	setStage("building gui in " .. tostring(parent))
 	local old = nil
 	pcall(function()
 		old = parent:FindFirstChild("OreValueMaximiserGui")
@@ -1794,6 +1852,7 @@ local function buildGui()
 	for _, parent in guiParentCandidates() do
 		local ok, gui = pcall(buildGuiIn, parent)
 		if ok and gui and gui.Parent == parent then
+			setStage("gui built in " .. parent:GetFullName())
 			note("GUI parented to %s", parent:GetFullName())
 			task.delay(3, function()
 				if not gui.Parent then
@@ -1814,7 +1873,8 @@ local function buildGui()
 			if gui then gui:Destroy() end
 		end)
 	end
-	err("could not create the GUI in any container (last error: %s). If you are in Roblox Studio, run this while PLAYING, not in edit mode.", tostring(lastErr))
+	errf("could not create the GUI in any container (last error: %s). If you are in Roblox Studio, run this while PLAYING, not in edit mode.", tostring(lastErr))
+	copyReport()
 	return nil
 end
 
@@ -2034,7 +2094,7 @@ local function bootstrap()
 	local missing = missingModules()
 	local guiOk, guiErr = pcall(buildGui)
 	if not guiOk then
-		err("buildGui failed: %s", tostring(guiErr))
+		errf("buildGui failed: %s", tostring(guiErr))
 	end
 	connectButtons = function()
 		if UI.buttons then
@@ -2048,6 +2108,7 @@ local function bootstrap()
 		setStatus("Missing libraries: " .. table.concat(missing, ", ") .. ". Press SCAN INVENTORY once your base loads.", true)
 	end
 	connectButtons()
+	setStage("ready - waiting for SCAN INVENTORY")
 	note("loaded. Waiting for SCAN INVENTORY.")
 end
 
@@ -2086,6 +2147,8 @@ local API = {
 	fmtMult = fmtMult,
 	setStatus = setStatus,
 	setStats = setStats,
+	copyReport = copyReport,
+	buildReport = buildReport,
 }
 -- Some environments freeze _G; fall back to shared so the API is reachable.
 local exportOk = pcall(function()
@@ -2097,6 +2160,15 @@ if not exportOk and typeof(shared) == "table" then
 	end)
 end
 
+
+pcall(function()
+	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+		if processed then return end
+		if input.KeyCode == Enum.KeyCode.F8 then
+			copyReport()
+		end
+	end)
+end)
 
 if RunService:IsRunning() then
 	bootstrap()

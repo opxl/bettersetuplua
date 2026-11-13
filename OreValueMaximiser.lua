@@ -71,6 +71,7 @@ local PASSIVE_SPECIALS = {
 -- DIAGNOSTICS
 ------------------------------------------------------------------------------
 
+local VERSION = "1.0.3-billboard"
 local Diagnostics = { notes = {}, warnings = {}, errors = {} }
 
 local function note(fmt, ...)
@@ -92,6 +93,7 @@ local function errf(fmt, ...)
 end
 
 local LocalPlayer
+local UI
 Diagnostics.stage = "loading"
 
 local function setStage(stage)
@@ -126,6 +128,14 @@ local function buildReport()
 	pcall(function()
 		if LocalPlayer then
 			parts[#parts + 1] = "player: " .. LocalPlayer.Name
+		end
+	end)
+	pcall(function()
+		parts[#parts + 1] = "version: " .. tostring(VERSION)
+	end)
+	pcall(function()
+		if UI and UI.panel then
+			parts[#parts + 1] = "panel size on screen: " .. tostring(UI.panel.AbsoluteSize)
 		end
 	end)
 	parts[#parts + 1] = "-- notes (" .. #Diagnostics.notes .. ") --"
@@ -1685,7 +1695,7 @@ end
 -- GUI (mobile + desktop friendly)
 ------------------------------------------------------------------------------
 
-local UI = {}
+UI = {}
 local connectButtons
 
 local function make(class, props, parent)
@@ -1716,22 +1726,13 @@ local function guiParentCandidates()
 	return candidates
 end
 
-local function buildGuiIn(parent)
-	setStage("building gui in " .. tostring(parent))
+local function buildGuiIn(parent, asBillboard)
+	setStage("building gui in " .. tostring(parent) .. (asBillboard and " (billboard)" or ""))
 	local old = nil
 	pcall(function()
 		old = parent:FindFirstChild("OreValueMaximiserGui")
 	end)
 	if old then old:Destroy() end
-
-	local gui = make("ScreenGui", {
-		Name = "OreValueMaximiserGui",
-		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-	}, parent)
-	gui.DisplayOrder = 999999
-	gui.Enabled = true
 
 	local isMobile = false
 	pcall(function()
@@ -1739,6 +1740,32 @@ local function buildGuiIn(parent)
 			and not game:GetService("UserInputService").MouseEnabled
 	end)
 	local scale = isMobile and CONFIG.UI_SCALE_MOBILE or 1
+
+	local gui
+	if asBillboard then
+		local adornee
+		pcall(function()
+			local char = LocalPlayer.Character
+			adornee = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head"))
+		end)
+		gui = make("BillboardGui", {
+			Name = "OreValueMaximiserGui",
+			Adornee = adornee,
+			Size = UDim2.fromOffset(320 * scale, 430 * scale),
+			StudsOffset = Vector3.new(0, 4, 0),
+			AlwaysOnTop = true,
+			Active = true,
+		}, parent)
+	else
+		gui = make("ScreenGui", {
+			Name = "OreValueMaximiserGui",
+			ResetOnSpawn = false,
+			IgnoreGuiInset = true,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		}, parent)
+		gui.DisplayOrder = 999999
+		gui.Enabled = true
+	end
 
 	local panel = make("Frame", {
 		Name = "Panel",
@@ -1847,6 +1874,7 @@ local function buildGuiIn(parent)
 	end
 
 	UI.gui = gui
+	UI.panel = panel
 	UI.status = status
 	UI.stats = stats
 	UI.buttons = buttons
@@ -1865,6 +1893,24 @@ local function buildGui()
 					warn("[OreVM] GUI was removed from " .. parent:GetFullName() .. " - rebuilding")
 					pcall(buildGui)
 					if connectButtons then pcall(connectButtons) end
+				end
+			end)
+			task.delay(6, function()
+				if not gui.Parent then return end
+				local abs = UI.panel and UI.panel.AbsoluteSize
+				if abs and (abs.X < 1 or abs.Y < 1) then
+					warn("[OreVM] ScreenGui is not rendering (panel size on screen is 0) - switching to billboard UI above your character")
+					local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+					if playerGui then
+						local ok2, gui2 = pcall(buildGuiIn, playerGui, true)
+						if ok2 and gui2 then
+							setStage("ready - billboard mode (ScreenGui did not render)")
+							if connectButtons then pcall(connectButtons) end
+						else
+							errf("billboard fallback failed: %s", tostring(gui2))
+							copyReport()
+						end
+					end
 				end
 			end)
 			return gui

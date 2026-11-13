@@ -71,7 +71,7 @@ local PASSIVE_SPECIALS = {
 -- DIAGNOSTICS
 ------------------------------------------------------------------------------
 
-local VERSION = "1.0.3-billboard"
+local VERSION = "1.1.0-guide-gui"
 local Diagnostics = { notes = {}, warnings = {}, errors = {} }
 
 local function note(fmt, ...)
@@ -1767,80 +1767,139 @@ local function buildGuiIn(parent, asBillboard)
 		gui.Enabled = true
 	end
 
-	local panel = make("Frame", {
-		Name = "Panel",
+	local main = make("Frame", {
+		Name = "MainFrame",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(320 * scale, 430 * scale),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = asBillboard and UDim2.new(1, 0, 1, 0) or UDim2.fromScale(0.4, 0.55),
 		BackgroundColor3 = Color3.fromRGB(24, 26, 34),
 		BorderSizePixel = 0,
 		Active = true,
 		Parent = gui,
 	})
-	make("UICorner", { CornerRadius = UDim.new(0, 10) }, panel)
-	make("UIStroke", { Color = Color3.fromRGB(90, 200, 250), Thickness = 2 }, panel)
+	make("UICorner", { CornerRadius = UDim.new(0, 10) }, main)
+	make("UIStroke", { Color = Color3.fromRGB(90, 200, 250), Thickness = 2 }, main)
+	if not asBillboard then
+		make("UISizeConstraint", { MinSize = Vector2.new(230, 44), MaxSize = Vector2.new(360, 480) }, main)
+	end
 
 	local title = make("TextLabel", {
 		Name = "Title",
-		Size = UDim2.new(1, 0, 0, 34 * scale),
 		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 10, 0, 0),
+		Size = UDim2.new(1, -84, 0, 36),
+		Font = Enum.Font.GothamBold,
 		Text = "ORE VALUE MAXIMISER",
 		TextColor3 = Color3.fromRGB(120, 220, 255),
-		Font = Enum.Font.GothamBold,
-		TextSize = 17 * scale,
-		Parent = panel,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = main,
 	})
 
-	local status = make("TextLabel", {
-		Name = "Status",
-		Size = UDim2.new(1, -16, 0, 44 * scale),
-		Position = UDim2.new(0, 8, 0, 36 * scale),
+	local closeButton = make("TextButton", {
+		Name = "CloseButton",
+		Position = UDim2.new(1, -34, 0, 4),
+		Size = UDim2.fromOffset(30, 28),
+		BackgroundColor3 = Color3.fromRGB(170, 55, 55),
+		Text = "X",
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.GothamBold,
+		TextSize = 14,
+		AutoButtonColor = true,
+		Parent = main,
+	})
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, closeButton)
+
+	local minimiseButton = make("TextButton", {
+		Name = "MinimiseButton",
+		Position = UDim2.new(1, -68, 0, 4),
+		Size = UDim2.fromOffset(30, 28),
+		BackgroundColor3 = Color3.fromRGB(70, 90, 120),
+		Text = "-",
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.GothamBold,
+		TextSize = 16,
+		AutoButtonColor = true,
+		Parent = main,
+	})
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, minimiseButton)
+
+	local statusLabel = make("TextLabel", {
+		Name = "StatusLabel",
+		Position = UDim2.new(0, 10, 0, 38),
+		Size = UDim2.new(1, -20, 0, 54),
 		BackgroundTransparency = 1,
 		Text = "Idle. Press SCAN INVENTORY.",
 		TextColor3 = Color3.fromRGB(230, 230, 230),
 		Font = Enum.Font.Gotham,
-		TextSize = 13 * scale,
+		TextSize = 14,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		Parent = panel,
+		Parent = main,
 	})
 
-	local stats = make("TextLabel", {
-		Name = "Stats",
-		Size = UDim2.new(1, -16, 0, 92 * scale),
-		Position = UDim2.new(0, 8, 0, 82 * scale),
+	local scroll = make("ScrollingFrame", {
+		Name = "ScrollFrame",
+		Position = UDim2.new(0, 10, 0, 96),
+		Size = UDim2.new(1, -20, 1, -106),
 		BackgroundTransparency = 1,
-		Text = "-",
-		TextColor3 = Color3.fromRGB(180, 255, 190),
-		Font = Enum.Font.Code,
-		TextSize = 12 * scale,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		Parent = panel,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 6,
+		Parent = main,
 	})
+	make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, scroll)
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 8),
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 8),
+	}, scroll)
 
-	local buttons = {}
-	local labels = { "SCAN INVENTORY", "CALCULATE BEST ORDER", "BUILD OPTIMISED FACTORY", "STOP" }
-	for i, label in ipairs(labels) do
+	local function makeButton(name, text, color, order)
 		local btn = make("TextButton", {
-			Name = label,
-			Size = UDim2.new(1, -16, 0, 46 * scale),
-			Position = UDim2.new(0, 8, 0, (178 + (i - 1) * 52) * scale),
-			BackgroundColor3 = i == 4 and Color3.fromRGB(150, 50, 50) or Color3.fromRGB(40, 90, 160),
-			Text = label,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
+			Name = name,
+			Size = UDim2.new(1, -8, 0, 44),
+			BackgroundColor3 = color,
+			Text = text,
+			TextColor3 = Color3.new(1, 1, 1),
 			Font = Enum.Font.GothamBold,
-			TextSize = 16 * scale,
+			TextSize = 16,
 			AutoButtonColor = true,
-			Parent = panel,
+			LayoutOrder = order,
+			Parent = scroll,
 		})
 		make("UICorner", { CornerRadius = UDim.new(0, 8) }, btn)
-		buttons[i] = btn
+		return btn
 	end
 
-	-- drag (mouse + touch)
+	local scanButton = makeButton("ScanButton", "SCAN INVENTORY", Color3.fromRGB(40, 110, 190), 1)
+	local calculateButton = makeButton("CalculateButton", "CALCULATE BEST ORDER", Color3.fromRGB(190, 125, 40), 2)
+	local buildButton = makeButton("BuildButton", "BUILD OPTIMISED FACTORY", Color3.fromRGB(40, 150, 80), 3)
+	local stopButton = makeButton("StopButton", "STOP", Color3.fromRGB(170, 55, 55), 4)
+
+	local resultsLabel = make("TextLabel", {
+		Name = "ResultsLabel",
+		Size = UDim2.new(1, -8, 0, 150),
+		BackgroundColor3 = Color3.fromRGB(15, 17, 24),
+		BorderSizePixel = 0,
+		Text = "Results will appear here.",
+		TextColor3 = Color3.fromRGB(180, 255, 190),
+		Font = Enum.Font.Code,
+		TextSize = 13,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		LayoutOrder = 5,
+		Parent = scroll,
+	})
+	make("UICorner", { CornerRadius = UDim.new(0, 8) }, resultsLabel)
+
+	-- drag (mouse + touch), ScreenGui mode only
+	if not asBillboard then
 	do
 		local dragging, dragStart, startPos = false, nil, nil
 		local function inputBegan(input)
@@ -1848,12 +1907,12 @@ local function buildGuiIn(parent, asBillboard)
 				or input.UserInputType == Enum.UserInputType.Touch then
 				dragging = true
 				dragStart = input.Position
-				startPos = panel.Position
+				startPos = main.Position
 			end
 		end
 		title.InputBegan:Connect(inputBegan)
-		panel.InputBegan:Connect(function(input)
-			if input.Position.Y - panel.AbsolutePosition.Y < 40 then
+		main.InputBegan:Connect(function(input)
+			if input.Position.Y - main.AbsolutePosition.Y < 40 then
 				inputBegan(input)
 			end
 		end)
@@ -1862,7 +1921,7 @@ local function buildGuiIn(parent, asBillboard)
 			if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
 				or input.UserInputType == Enum.UserInputType.Touch) then
 				local delta = input.Position - dragStart
-				panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+				main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 			end
 		end)
 		uis.InputEnded:Connect(function(input)
@@ -1872,12 +1931,18 @@ local function buildGuiIn(parent, asBillboard)
 			end
 		end)
 	end
+	end
 
 	UI.gui = gui
-	UI.panel = panel
-	UI.status = status
-	UI.stats = stats
-	UI.buttons = buttons
+	UI.panel = main
+	UI.mainFrame = main
+	UI.scroll = scroll
+	UI.status = statusLabel
+	UI.statusLabel = statusLabel
+	UI.stats = resultsLabel
+	UI.buttons = { scanButton, calculateButton, buildButton, stopButton }
+	UI.closeButton = closeButton
+	UI.minimiseButton = minimiseButton
 	return gui
 end
 
@@ -2143,12 +2208,55 @@ local function bootstrap()
 	if not guiOk then
 		errf("buildGui failed: %s", tostring(guiErr))
 	end
+	local busy = false
 	connectButtons = function()
+		local function guarded(label, fn)
+			return function()
+				if busy then
+					setStatus("Please wait - " .. label .. " is already running...", true)
+					return
+				end
+				busy = true
+				setStatus(label .. "...")
+				note("button pressed: " .. label)
+				task.spawn(function()
+					local ok, err = pcall(fn)
+					if not ok then
+						errf("%s failed: %s", label, tostring(err))
+						setStatus(label .. " error: " .. tostring(err), true)
+					end
+					busy = false
+				end)
+			end
+		end
 		if UI.buttons then
-			UI.buttons[1].Activated:Connect(doScan)
-			UI.buttons[2].Activated:Connect(doCalculate)
-			UI.buttons[3].Activated:Connect(doBuild)
+			UI.buttons[1].Activated:Connect(guarded("Scanning inventory", doScan))
+			UI.buttons[2].Activated:Connect(guarded("Calculating best order", doCalculate))
+			UI.buttons[3].Activated:Connect(guarded("Building factory", doBuild))
 			UI.buttons[4].Activated:Connect(doStop)
+		end
+		if UI.closeButton then
+			UI.closeButton.Activated:Connect(function()
+				if UI.gui then pcall(function() UI.gui:Destroy() end) end
+				UI.gui = nil
+				UI.buttons = nil
+				UI.panel = nil
+				UI.mainFrame = nil
+				note("GUI closed - re-run the loader script to reopen it.")
+			end)
+		end
+		if UI.minimiseButton then
+			UI.minimiseButton.Activated:Connect(function()
+				local mainFrame = UI.mainFrame
+				if not mainFrame then return end
+				UI.minimised = not UI.minimised
+				local show = not UI.minimised
+				if UI.scroll then UI.scroll.Visible = show end
+				if UI.statusLabel then UI.statusLabel.Visible = show end
+				if UI.gui and UI.gui:IsA("ScreenGui") then
+					mainFrame.Size = show and UDim2.fromScale(0.4, 0.55) or UDim2.fromScale(0.4, 0)
+				end
+			end)
 		end
 	end
 	if #missing > 0 then

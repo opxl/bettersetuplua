@@ -1625,6 +1625,7 @@ end
 ------------------------------------------------------------------------------
 
 local UI = {}
+local connectButtons
 
 local function make(class, props, parent)
 	local inst = Instance.new(class)
@@ -1637,14 +1638,24 @@ local function make(class, props, parent)
 	return inst
 end
 
-local function findGuiParent()
-	local ok, coreGui = pcall(function() return gethui and gethui() or game:GetService("CoreGui") end)
-	if ok and coreGui then return coreGui end
-	return LocalPlayer:WaitForChild("PlayerGui")
+local function guiParentCandidates()
+	local candidates = {}
+	if type(gethui) == "function" then
+		pcall(function()
+			local h = gethui()
+			if h then table.insert(candidates, h) end
+		end)
+	end
+	pcall(function()
+		table.insert(candidates, game:GetService("CoreGui"))
+	end)
+	pcall(function()
+		table.insert(candidates, LocalPlayer:WaitForChild("PlayerGui"))
+	end)
+	return candidates
 end
 
-local function buildGui()
-	local parent = findGuiParent()
+local function buildGuiIn(parent)
 	local old = nil
 	pcall(function()
 		old = parent:FindFirstChild("OreValueMaximiserGui")
@@ -1657,6 +1668,7 @@ local function buildGui()
 		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	}, parent)
+	gui.DisplayOrder = 999999
 
 	local isMobile = false
 	pcall(function()
@@ -1775,6 +1787,35 @@ local function buildGui()
 	UI.stats = stats
 	UI.buttons = buttons
 	return gui
+end
+
+local function buildGui()
+	local lastErr
+	for _, parent in guiParentCandidates() do
+		local ok, gui = pcall(buildGuiIn, parent)
+		if ok and gui and gui.Parent == parent then
+			note("GUI parented to %s", parent:GetFullName())
+			task.delay(3, function()
+				if not gui.Parent then
+					warn("[OreVM] GUI was removed from " .. parent:GetFullName() .. " - rebuilding in PlayerGui")
+					local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+					if playerGui then
+						local ok2, gui2 = pcall(buildGuiIn, playerGui)
+						if ok2 and gui2 and connectButtons then
+							pcall(connectButtons)
+						end
+					end
+				end
+			end)
+			return gui
+		end
+		if not ok then lastErr = gui end
+		pcall(function()
+			if gui then gui:Destroy() end
+		end)
+	end
+	err("could not create the GUI in any container (last error: %s). If you are in Roblox Studio, run this while PLAYING, not in edit mode.", tostring(lastErr))
+	return nil
 end
 
 local function setStatus(text, isError)
@@ -1991,14 +2032,22 @@ end
 
 local function bootstrap()
 	local missing = missingModules()
-	buildGui()
+	local guiOk, guiErr = pcall(buildGui)
+	if not guiOk then
+		err("buildGui failed: %s", tostring(guiErr))
+	end
+	connectButtons = function()
+		if UI.buttons then
+			UI.buttons[1].Activated:Connect(doScan)
+			UI.buttons[2].Activated:Connect(doCalculate)
+			UI.buttons[3].Activated:Connect(doBuild)
+			UI.buttons[4].Activated:Connect(doStop)
+		end
+	end
 	if #missing > 0 then
 		setStatus("Missing libraries: " .. table.concat(missing, ", ") .. ". Press SCAN INVENTORY once your base loads.", true)
 	end
-	UI.buttons[1].Activated:Connect(doScan)
-	UI.buttons[2].Activated:Connect(doCalculate)
-	UI.buttons[3].Activated:Connect(doBuild)
-	UI.buttons[4].Activated:Connect(doStop)
+	connectButtons()
 	note("loaded. Waiting for SCAN INVENTORY.")
 end
 
